@@ -142,8 +142,5 @@ def predict_tea_variant_route():
 
     return jsonify({"tea_variant": t_variant})
 
-
-
-
 if __name__ == '__main__':
     app.run(debug=True, port=8080)
