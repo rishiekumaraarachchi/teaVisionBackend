@@ -10,9 +10,11 @@ import cv2
 import numpy as np
 import joblib
 import os
+from flask_cors import CORS
 from predictor import predict_tea_variant
 
 app = Flask(__name__)
+CORS(app)
 
 # Load the model and label encoder
 model_path = 'models/'
@@ -141,6 +143,67 @@ def predict_tea_variant_route():
     t_variant = predict_tea_variant(image)
 
     return jsonify({"tea_variant": t_variant})
+
+
+# Function to convert an image to Base64
+def image_to_base64(image_array):
+    # Convert the image array to a PIL Image
+    image = Image.fromarray(image_array)
+    
+    # Save the image to a BytesIO object
+    buffered = io.BytesIO()
+    image.save(buffered, format="PNG")
+    
+    # Encode the image to Base64
+    return base64.b64encode(buffered.getvalue()).decode('utf-8')
+
+
+
+# Endpoint for processing the uploaded image
+@app.route('/upload', methods=['POST'])
+def upload_image():
+    # Check if an image file was uploaded
+    if 'image' not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    file= request.files['image']
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+
+    try:
+        # Open the image file and convert it to a format that OpenCV can use
+        image = Image.open(io.BytesIO(file.read())).convert('RGB')
+        image_array = np.array(image)
+
+        # Perform fiber analysis
+        fiber_image, fiber_stats = identify_fiber_in_image(image_array)
+        
+        # Perform stroke analysis
+        stroke_image, stroke_stats = identify_stroke_in_image(image_array)
+        
+        # Predict the tea variant
+        tea_variant = predict_tea_variant(image_array)
+
+        # Convert the processed images to Base64
+        fiber_image_base64 = image_to_base64(fiber_image)
+        stroke_image_base64 = image_to_base64(stroke_image)
+
+        # Prepare the response data
+        response_data = {
+            "tea_variant": tea_variant,
+            "fiber_stats": fiber_stats,
+            "stroke_stats": stroke_stats,
+            "fiber_image": fiber_image_base64,
+            "stroke_image": stroke_image_base64
+        }
+
+        # Return the response data as JSON
+        return jsonify(response_data), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+
 
 if __name__ == '__main__':
     app.run(debug=True, port=8080)
